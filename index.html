@@ -1,1 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Milk Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f9f9f9;
+    }
+    .tabs {
+      display: flex;
+      justify-content: space-around;
+      background: #333;
+    }
+    .tab {
+      color: white;
+      padding: 15px;
+      text-align: center;
+      flex: 1;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #2196F3;
+    }
+    .container {
+      padding: 15px;
+    }
+    input, button {
+      padding: 10px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    input {
+      width: 100%;
+    }
+    button {
+      background: #2196F3;
+      color: white;
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      margin-top: 15px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #ddd;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .day {
+      border: 1px solid #ccc;
+      padding: 8px;
+      min-height: 60px;
+      background: #fff;
+      border-radius: 5px;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .day.today {
+      border: 2px solid #2196F3;
+    }
+    .day.bought {
+      background: #c8e6c9;
+    }
+    .day.not-bought {
+      background: #ffcdd2;
+    }
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .summary {
+      margin-top: 15px;
+      font-weight: bold;
+      background: #f0f8ff;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      white-space: nowrap;
+      overflow-x: auto;
+      text-align: center;
+      font-size: 20px;
+    }
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-weight: bold;
+      margin-top: 10px;
+      font-size: 10px;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    @media (max-width: 600px) {
+      .tabs {
+        flex-direction: column;
+      }
+      .tab {
+        padding: 12px;
+      }
+      .calendar {
+        grid-template-columns: repeat(7, 1fr);
+      }
+      .day {
+        font-size: 10px;
+        padding: 5px;
+        min-height: 40px;
+      }
+      .summary {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('entry')">Entry</div>
+    <div class="tab" onclick="switchTab('report')">Report</div>
+    <div class="tab" onclick="switchTab('backup')">Backup</div>
+  </div>
 
+  <!-- ENTRY TAB -->
+  <div class="container tab-content" id="entryTab">
+    <h2>Milk Entry</h2>
+    <label for="defaultPrice">Set Default Price per Liter:</label>
+    <input type="number" id="defaultPrice" min="0" step="0.01" onchange="saveDefaultPrice()" />
+
+    <label for="date">Date:</label>
+    <input type="date" id="date" />
+
+    <label for="liters">Liters Bought:</label>
+    <div class="liters-input-group">
+      <button type="button" onclick="adjustLiters(-0.5)">−</button>
+      <input type="number" id="liters" min="0" step="0.1" />
+      <button type="button" onclick="adjustLiters(0.5)">+</button>
+    </div>
+
+    <label for="price">Price per Liter:</label>
+    <input type="number" id="price" min="0" step="0.01" />
+
+    <button onclick="addEntry()">Add Entry</button>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Liters</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="entryTable"></tbody>
+    </table>
+  </div>
+
+  <!-- REPORT TAB -->
+  <div class="container tab-content" id="reportTab">
+   
+    <div class="nav">
+      <button onclick="changeMonth(-1)">←</button>
+      <b><span id="monthLabel"></span></B>
+      <button onclick="changeMonth(1)">→</button>
+    </div>
+    <div class="weekdays">
+      <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </div>
+    <div class="calendar" id="calendarDays"></div>
+    <div class="summary" id="reportSummary"></div>
+  </div>
+
+  <!-- BACKUP TAB -->
+  <div class="container tab-content" id="backupTab">
+    <h2>Backup & Restore</h2>
+    <button onclick="exportBackup()">Export Backup</button>
+    <br><br>
+    <input type="file" id="backupFile" accept=".json" />
+    <button onclick="importBackup()">Import Backup</button>
+    <div id="backupMessage"></div>
+  </div>
+
+  <script>
+    let entries = JSON.parse(localStorage.getItem("milkEntries") || "{}");
+    let defaultPrice = localStorage.getItem("defaultPrice") || "";
+    let currentDate = new Date();
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById("date").value = today;
+      document.getElementById("liters").value = "1";
+      document.getElementById("defaultPrice").value = defaultPrice;
+      document.getElementById("price").value = defaultPrice;
+      document.getElementById("date").addEventListener("change", updateTable);
+      updateTable();
+      renderCalendar();
+      switchTab('entry');  // Ensure the Entry tab is active by default
+    });
+
+    function saveToStorage() {
+      localStorage.setItem("milkEntries", JSON.stringify(entries));
+    }
+
+    function saveDefaultPrice() {
+      const dp = document.getElementById("defaultPrice").value;
+      localStorage.setItem("defaultPrice", dp);
+      document.getElementById("price").value = dp;
+    }
+
+    function adjustLiters(amount) {
+      const input = document.getElementById("liters");
+      let current = parseFloat(input.value) || 0;
+      current += amount;
+      if (current < 0) current = 0;
+      input.value = current.toFixed(1);
+    }
+
+    function addEntry() {
+      const date = document.getElementById('date').value;
+      const liters = parseFloat(document.getElementById('liters').value);
+      const price = parseFloat(document.getElementById('price').value);
+
+      if (!date || isNaN(liters) || isNaN(price)) {
+        alert("Please fill all fields correctly.");
+        return;
+      }
+
+      entries[date] = { liters, price };
+      saveToStorage();
+      updateTable();
+      if (isSameMonth(new Date(date), currentDate)) renderCalendar();
+	  alert("Added successfully !!!!")
+    }
+
+    function deleteEntry(date) {
+      if (confirm(`Delete entry for ${date}?`)) {
+        delete entries[date];
+        saveToStorage();
+        updateTable();
+        renderCalendar();
+      }
+    }
+
+    function updateTable() {
+      const tbody = document.getElementById('entryTable');
+      tbody.innerHTML = '';
+      const selectedDate = document.getElementById('date').value;
+      if (!selectedDate) return;
+
+      const selectedMonth = new Date(selectedDate).getMonth();
+      const selectedYear = new Date(selectedDate).getFullYear();
+
+      const filteredDates = Object.keys(entries)
+        .filter(date => {
+          const d = new Date(date);
+          return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+        })
+        .sort();
+
+      filteredDates.forEach(date => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${date}</td>
+          <td>${entries[date].liters}</td>
+          <td><button onclick="deleteEntry('${date}')">Delete</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(tab + "Tab").classList.add('active');
+      
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(t => t.classList.remove('active'));
+      if (tab === 'entry') tabs[0].classList.add('active');
+      else if (tab === 'report') tabs[1].classList.add('active');
+      else if (tab === 'backup') tabs[2].classList.add('active');
+
+      if (tab === "report") renderCalendar();
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const calendar = document.getElementById("calendarDays");
+      calendar.innerHTML = "";
+
+      document.getElementById("monthLabel").innerText = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      for (let i = 0; i < firstDay; i++) {
+        calendar.appendChild(document.createElement("div"));
+      }
+
+      let totalLiters = 0;
+      let totalAmount = 0;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        const dayElement = document.createElement("div");
+        dayElement.classList.add("day");
+        const entry = entries[date];
+        
+        if (entry) {
+          totalLiters += entry.liters;
+          totalAmount += entry.liters * entry.price;
+          dayElement.classList.add(entry.liters > 0 ? "bought" : "not-bought");
+          dayElement.innerHTML = `<strong>${day}</strong><br>${entry.liters} L`;
+        } else {
+          dayElement.classList.add("not-bought");
+          dayElement.innerHTML = `<strong>${day}</strong><br>Not Bought`;
+        }
+        
+        if (new Date().toISOString().split('T')[0] === date) {
+          dayElement.classList.add('today');
+        }
+
+        calendar.appendChild(dayElement);
+      }
+
+      document.getElementById("reportSummary").innerHTML = `Total Liters: ${totalLiters} L <br> Total Amount: ₹${totalAmount.toFixed(2)}`;
+    }
+
+    function changeMonth(direction) {
+      currentDate.setMonth(currentDate.getMonth() + direction);
+      renderCalendar();
+    }
+
+    function exportBackup() {
+      const backupData = JSON.stringify(entries);
+      const blob = new Blob([backupData], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'milk_entries_backup.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function importBackup() {
+      const file = document.getElementById("backupFile").files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const importedEntries = JSON.parse(event.target.result);
+          entries = importedEntries;
+          saveToStorage();
+          updateTable();
+          renderCalendar();
+          document.getElementById("backupMessage").innerText = "Backup imported successfully!";
+        } catch (e) {
+          document.getElementById("backupMessage").innerText = "Error importing backup.";
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function isSameMonth(date1, date2) {
+      return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
+    }
+  </script>
+</body>
+</html>
